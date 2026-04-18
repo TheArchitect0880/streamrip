@@ -43,6 +43,19 @@ def _first_not_none(*vals):
     return None
 
 
+def _merge_names(base_names: str | None, role_names: list[str] | None) -> str | None:
+    merged: list[str] = []
+    if base_names:
+        merged.extend(name.strip() for name in base_names.split(",") if name.strip())
+    if role_names:
+        for name in role_names:
+            if name not in merged:
+                merged.append(name)
+    if not merged:
+        return None
+    return ", ".join(merged)
+
+
 @dataclass(slots=True)
 class TrackInfo:
     id: str
@@ -64,6 +77,7 @@ class TrackMetadata:
     tracknumber: int
     discnumber: int
     composer: str | None
+    author: str | None = None
     isrc: str | None = None
     lyrics: str | None = ""
     replaygain_track_gain: str | None = None
@@ -84,7 +98,17 @@ class TrackMetadata:
         if work is not None and work not in title:
             title = f"{work}: {title}"
 
-        composer = typed(resp.get("composer", {}).get("name"), str | None)
+        base_composer = typed(resp.get("composer", {}).get("name"), str | None)
+        parsed_roles = typed(resp.get("_parsed_performer_roles"), dict | None)
+        role_composers = []
+        role_authors = []
+        if isinstance(parsed_roles, dict):
+            role_composers = typed(parsed_roles.get("Composer"), list | None) or []
+            role_authors = (
+                typed(parsed_roles.get("Author"), list | None) or []
+            ) + (typed(parsed_roles.get("Lyricist"), list | None) or [])
+        composer = _merge_names(base_composer, role_composers)
+        author = _merge_names(None, role_authors)
         tracknumber = typed(resp.get("track_number", 1), int)
         discnumber = typed(resp.get("media_number", 1), int)
         artist = typed(
@@ -124,6 +148,7 @@ class TrackMetadata:
             tracknumber=tracknumber,
             discnumber=discnumber,
             composer=composer,
+            author=author,
             isrc=isrc,
             replaygain_track_gain=replaygain_track_gain,
         )
