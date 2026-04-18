@@ -27,6 +27,22 @@ def _tidal_quality_from_resp(resp: dict) -> int:
     return quality
 
 
+def _format_replaygain(v) -> str | None:
+    if v is None:
+        return None
+    try:
+        return f"{float(v):+.2f} dB"
+    except (TypeError, ValueError):
+        return str(v)
+
+
+def _first_not_none(*vals):
+    for v in vals:
+        if v is not None:
+            return v
+    return None
+
+
 @dataclass(slots=True)
 class TrackInfo:
     id: str
@@ -50,6 +66,7 @@ class TrackMetadata:
     composer: str | None
     isrc: str | None = None
     lyrics: str | None = ""
+    replaygain_track_gain: str | None = None
 
     @classmethod
     def from_qobuz(cls, album: AlbumMetadata, resp: dict) -> TrackMetadata | None:
@@ -81,6 +98,13 @@ class TrackMetadata:
         track_id = str(resp["id"])
         bit_depth = typed(resp.get("maximum_bit_depth"), int | None)
         sampling_rate = typed(resp.get("maximum_sampling_rate"), int | float | None)
+        replaygain_track_gain = _format_replaygain(
+            _first_not_none(
+                safe_get(resp, "audio_info", "replaygain_track_gain"),
+                resp.get("replaygain_track_gain"),
+                resp.get("gain"),
+            )
+        )
         # Is the info included?
         explicit = False
 
@@ -101,6 +125,7 @@ class TrackMetadata:
             discnumber=discnumber,
             composer=composer,
             isrc=isrc,
+            replaygain_track_gain=replaygain_track_gain,
         )
 
     @classmethod
@@ -189,6 +214,9 @@ class TrackMetadata:
             artist = track["artist"]["name"]
 
         lyrics = track.get("lyrics", "")
+        replaygain_track_gain = _format_replaygain(
+            _first_not_none(track.get("replayGain"), track.get("gain"))
+        )
 
         quality = _tidal_quality_from_resp(track)
         sampling_rate = typed(
@@ -229,6 +257,7 @@ class TrackMetadata:
             composer=None,
             isrc=isrc,
             lyrics=lyrics,
+            replaygain_track_gain=replaygain_track_gain,
         )
 
     @classmethod

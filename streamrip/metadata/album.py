@@ -35,6 +35,15 @@ def _tidal_quality_from_resp(resp: dict) -> int:
     return quality
 
 
+def _format_replaygain(v) -> str | None:
+    if v is None:
+        return None
+    try:
+        return f"{float(v):+.2f} dB"
+    except (TypeError, ValueError):
+        return str(v)
+
+
 @dataclass(slots=True)
 class AlbumInfo:
     id: str
@@ -67,6 +76,7 @@ class AlbumMetadata:
     grouping: str | None = None
     lyrics: str | None = None
     purchase_date: str | None = None
+    replaygain_album_gain: str | None = None
 
     def get_genres(self) -> str:
         return ", ".join(self.genre)
@@ -172,6 +182,7 @@ class AlbumMetadata:
             grouping=None,
             lyrics=None,
             purchase_date=None,
+            replaygain_album_gain=_format_replaygain(resp.get("gain")),
             tracktotal=tracktotal,
         )
 
@@ -232,6 +243,7 @@ class AlbumMetadata:
             grouping=None,
             lyrics=None,
             purchase_date=None,
+            replaygain_album_gain=_format_replaygain(resp.get("replayGain")),
             tracktotal=tracktotal,
         )
 
@@ -383,6 +395,7 @@ class AlbumMetadata:
             grouping=None,
             lyrics=None,
             purchase_date=None,
+            replaygain_album_gain=_format_replaygain(resp.get("replayGain")),
             tracktotal=tracktotal,
         )
 
