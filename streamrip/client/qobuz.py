@@ -247,6 +247,17 @@ class QobuzClient(Client):
                 f'Error fetching metadata. Message: "{resp["message"]}"',
             )
 
+        if media_type == "track" and isinstance(resp.get("performers"), str):
+            resp["_parsed_performer_roles"] = self.parse_performers(resp["performers"])
+        elif media_type == "album" and isinstance(resp.get("tracks"), dict):
+            items = resp["tracks"].get("items")
+            if isinstance(items, list):
+                for track in items:
+                    if isinstance(track, dict) and isinstance(track.get("performers"), str):
+                        track["_parsed_performer_roles"] = self.parse_performers(
+                            track["performers"]
+                        )
+
         return resp
 
     async def get_label(self, label_id: str) -> dict:
@@ -453,3 +464,26 @@ class QobuzClient(Client):
     def get_quality(quality: int):
         quality_map = (5, 6, 7, 27)
         return quality_map[quality - 1]
+
+    @staticmethod
+    def parse_performers(performers_str: str | None) -> dict[str, list[str]]:
+        if not performers_str:
+            return {}
+
+        roles_dict: dict[str, list[str]] = {}
+        for entry in performers_str.split(" - "):
+            entry = entry.strip()
+            if not entry:
+                continue
+
+            parts = [part.strip() for part in entry.split(",") if part.strip()]
+            if len(parts) < 2:
+                continue
+
+            name = parts[0]
+            for role in parts[1:]:
+                roles_dict.setdefault(role, [])
+                if name not in roles_dict[role]:
+                    roles_dict[role].append(name)
+
+        return roles_dict

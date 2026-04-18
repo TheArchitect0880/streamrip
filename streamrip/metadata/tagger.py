@@ -21,6 +21,7 @@ FLAC_MAX_BLOCKSIZE = 16777215  # 16.7 MB
 MP4_KEYS = (
     "\xa9nam",
     "\xa9ART",
+    "----:com.apple.iTunes:ARTISTS",
     "\xa9alb",
     r"aART",
     "\xa9day",
@@ -42,11 +43,16 @@ MP4_KEYS = (
     "----:com.apple.iTunes:ISRC",
     "----:com.apple.iTunes:REPLAYGAIN_TRACK_GAIN",
     "----:com.apple.iTunes:REPLAYGAIN_ALBUM_GAIN",
+    None,
+    None,
+    None,
+    None,
 )
 
 MP3_KEYS = (
     id3.TIT2,  # type: ignore
     id3.TPE1,  # type: ignore
+    None,
     id3.TALB,  # type: ignore
     id3.TPE2,  # type: ignore
     id3.TCOM,  # type: ignore
@@ -68,11 +74,16 @@ MP3_KEYS = (
     id3.TSRC,
     None,
     None,
+    None,
+    None,
+    None,
+    None,
 )
 
 METADATA_TYPES = (
     "title",
     "artist",
+    "artists",
     "album",
     "albumartist",
     "composer",
@@ -94,6 +105,10 @@ METADATA_TYPES = (
     "isrc",
     "replaygain_track_gain",
     "replaygain_album_gain",
+    "source_platform",
+    "source_track_id",
+    "source_album_id",
+    "source_artist_id",
 )
 
 
@@ -159,11 +174,19 @@ class Container(Enum):
             if text is not None and k in {
                 "replaygain_track_gain",
                 "replaygain_album_gain",
+                "artists",
+                "source_track_id",
+                "source_album_id",
+                "source_artist_id",
             }:
+                if k.startswith("source_") and meta.source_platform:
+                    desc = f"{meta.source_platform}_{k.replace('source_', '')}".upper()
+                else:
+                    desc = k.upper()
                 out.append(
                     (
                         "TXXX",
-                        id3.TXXX(encoding=3, desc=k.upper(), text=str(text)),
+                        id3.TXXX(encoding=3, desc=desc, text=str(text)),
                     )
                 )
             elif text is not None and v is not None:
@@ -187,6 +210,20 @@ class Container(Enum):
                     text = val.encode("utf-8")
                 else:
                     text = None
+            elif k in {"artists", "source_track_id", "source_album_id", "source_artist_id"}:
+                val = self._attr_from_meta(meta, k)
+                if val is None:
+                    text = None
+                elif k.startswith("source_") and meta.source_platform:
+                    out.append(
+                        (
+                            f"----:com.apple.iTunes:{meta.source_platform.upper()}_{k.replace('source_', '').upper()}",
+                            str(val).encode("utf-8"),
+                        )
+                    )
+                    continue
+                else:
+                    text = str(val).encode("utf-8")
             else:
                 text = self._attr_from_meta(meta, k)
 
@@ -203,9 +240,14 @@ class Container(Enum):
             "tracknumber",
             "discnumber",
             "composer",
+            "artists",
             "isrc",
             "lyrics",
             "replaygain_track_gain",
+            "source_platform",
+            "source_track_id",
+            "source_album_id",
+            "source_artist_id",
         }
         if attr in in_trackmetadata:
             if attr == "album":
@@ -213,6 +255,8 @@ class Container(Enum):
             val = getattr(meta, attr)
             if val is None:
                 return None
+            if attr == "artists" and isinstance(val, list):
+                return ", ".join(str(v) for v in val)
             return str(val)
         else:
             if attr == "genre":
