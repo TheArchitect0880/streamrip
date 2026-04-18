@@ -217,6 +217,8 @@ class QobuzClient(Client):
     async def get_metadata(self, item: str, media_type: str):
         if media_type == "label":
             return await self.get_label(item)
+        if media_type == "playlist":
+            return await self.get_playlist(item)
 
         c = self.config.session.qobuz
         params = {
@@ -259,6 +261,46 @@ class QobuzClient(Client):
                         )
 
         return resp
+
+    async def get_playlist(self, playlist_id: str) -> dict:
+        c = self.config.session.qobuz
+        page_limit = 500
+        params = {
+            "app_id": str(c.app_id),
+            "playlist_id": playlist_id,
+            "limit": page_limit,
+            "offset": 0,
+            "extra": "tracks",
+        }
+        epoint = "playlist/get"
+        status, playlist_resp = await self._api_request(epoint, params)
+        assert status == 200
+        tracks_count = playlist_resp.get("tracks_count", 0)
+
+        if tracks_count <= page_limit:
+            return playlist_resp
+
+        requests = [
+            self._api_request(
+                epoint,
+                {
+                    "app_id": str(c.app_id),
+                    "playlist_id": playlist_id,
+                    "limit": page_limit,
+                    "offset": offset,
+                    "extra": "tracks",
+                },
+            )
+            for offset in range(page_limit, tracks_count, page_limit)
+        ]
+
+        results = await asyncio.gather(*requests)
+        items = playlist_resp["tracks"]["items"]
+        for status, resp in results:
+            assert status == 200
+            items.extend(resp["tracks"]["items"])
+
+        return playlist_resp
 
     async def get_label(self, label_id: str) -> dict:
         c = self.config.session.qobuz
