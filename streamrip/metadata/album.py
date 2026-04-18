@@ -18,6 +18,23 @@ logger = logging.getLogger("streamrip")
 genre_clean = re.compile(r"([^\u2192\/]+)")
 
 
+def _tidal_quality_from_resp(resp: dict) -> int:
+    quality_map: dict[str, int] = {
+        "LOW": 0,
+        "HIGH": 1,
+        "LOSSLESS": 2,
+        "HI_RES": 3,
+    }
+
+    tidal_quality = typed(resp.get("audioQuality", "LOW"), str)
+    quality = quality_map.get(tidal_quality, 0)
+    tags = safe_get(resp, "mediaMetadata", "tags", default=[])
+    if isinstance(tags, list) and "HIRES_LOSSLESS" in tags:
+        quality = max(quality, 3)
+
+    return quality
+
+
 @dataclass(slots=True)
 class AlbumInfo:
     id: str
@@ -317,21 +334,23 @@ class AlbumMetadata:
         if covers is None:
             covers = Covers()
 
-        quality_map: dict[str, int] = {
-            "LOW": 0,
-            "HIGH": 1,
-            "LOSSLESS": 2,
-            "HI_RES": 3,
-        }
-
-        tidal_quality = resp.get("audioQuality", "LOW")
-        quality = quality_map[tidal_quality]
+        quality = _tidal_quality_from_resp(resp)
+        sampling_rate = typed(
+            resp.get("maximumSamplingRate") or resp.get("maximum_sampling_rate"),
+            int | float | None,
+        )
+        bit_depth = typed(
+            resp.get("maximumBitDepth") or resp.get("maximum_bit_depth"),
+            int | None,
+        )
         if quality >= 2:
-            sampling_rate = 44100
-            if quality == 3:
-                bit_depth = 24
-            else:
-                bit_depth = 16
+            if sampling_rate is None:
+                sampling_rate = 44100
+            if bit_depth is None:
+                if quality == 3:
+                    bit_depth = 24
+                else:
+                    bit_depth = 16
         else:
             sampling_rate = None
             bit_depth = None
@@ -339,7 +358,7 @@ class AlbumMetadata:
         info = AlbumInfo(
             id=item_id,
             quality=quality,
-            container="MP4",
+            container="FLAC" if quality >= 2 else "MP4",
             label=None,
             explicit=explicit,
             sampling_rate=sampling_rate,
@@ -401,21 +420,23 @@ class AlbumMetadata:
         if covers is None:
             covers = Covers()
 
-        quality_map: dict[str, int] = {
-            "LOW": 0,
-            "HIGH": 1,
-            "LOSSLESS": 2,
-            "HI_RES": 3,
-        }
-
-        tidal_quality = resp.get("audioQuality", "LOW")
-        quality = quality_map[tidal_quality]
+        quality = _tidal_quality_from_resp(resp)
+        sampling_rate = typed(
+            resp.get("maximumSamplingRate") or resp.get("maximum_sampling_rate"),
+            int | float | None,
+        )
+        bit_depth = typed(
+            resp.get("maximumBitDepth") or resp.get("maximum_bit_depth"),
+            int | None,
+        )
         if quality >= 2:
-            sampling_rate = 44100
-            if quality == 3:
-                bit_depth = 24
-            else:
-                bit_depth = 16
+            if sampling_rate is None:
+                sampling_rate = 44100
+            if bit_depth is None:
+                if quality == 3:
+                    bit_depth = 24
+                else:
+                    bit_depth = 16
         else:
             sampling_rate = None
             bit_depth = None
@@ -423,7 +444,7 @@ class AlbumMetadata:
         info = AlbumInfo(
             id=item_id,
             quality=quality,
-            container="MP4",
+            container="FLAC" if quality >= 2 else "MP4",
             label=None,
             explicit=explicit,
             sampling_rate=sampling_rate,
