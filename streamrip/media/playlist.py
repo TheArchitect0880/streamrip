@@ -72,6 +72,7 @@ class PendingPlaylistTrack(Pending):
             meta.tracknumber = self.position
         if c.set_playlist_to_album:
             album.album = self.playlist_name
+            album.albumartist = "Various Artists"
 
         quality = self.config.session.get_source(self.client.source).quality
         try:
