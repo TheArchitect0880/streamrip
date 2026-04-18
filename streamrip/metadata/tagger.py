@@ -241,6 +241,7 @@ class Container(Enum):
             "discnumber",
             "composer",
             "artists",
+            "compilation",
             "isrc",
             "lyrics",
             "replaygain_track_gain",

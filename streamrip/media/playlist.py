@@ -67,11 +67,13 @@ class PendingPlaylistTrack(Pending):
             self.db.set_failed(self.client.source, "track", self.id)
             return None
 
+        meta.compilation = 1
         c = self.config.session.metadata
         if c.renumber_playlist_tracks:
             meta.tracknumber = self.position
         if c.set_playlist_to_album:
             album.album = self.playlist_name
+            album.albumartist = "Various Artists"
 
         quality = self.config.session.get_source(self.client.source).quality
         try:
@@ -172,6 +174,10 @@ class PendingPlaylist(Pending):
         name = meta.name
         parent = self.config.session.downloads.folder
         folder = os.path.join(parent, clean_filepath(name))
+        track_ids = meta.ids()
+        if not track_ids:
+            logger.warning(f"No available tracks to download in playlist '{name}'")
+            return None
         tracks = [
             PendingPlaylistTrack(
                 id,
@@ -182,8 +188,11 @@ class PendingPlaylist(Pending):
                 position + 1,
                 self.db,
             )
-            for position, id in enumerate(meta.ids())
+            for position, id in enumerate(track_ids)
         ]
+        if not tracks:
+            logger.warning(f"No tracks to download in playlist '{name}'")
+            return None
         return Playlist(name, self.config, self.client, tracks)
 
 
