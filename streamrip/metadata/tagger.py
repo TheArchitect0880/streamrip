@@ -40,6 +40,8 @@ MP4_KEYS = (
     None,
     None,
     "----:com.apple.iTunes:ISRC",
+    "----:com.apple.iTunes:REPLAYGAIN_TRACK_GAIN",
+    "----:com.apple.iTunes:REPLAYGAIN_ALBUM_GAIN",
 )
 
 MP3_KEYS = (
@@ -64,6 +66,8 @@ MP3_KEYS = (
     None,
     None,
     id3.TSRC,
+    None,
+    None,
 )
 
 METADATA_TYPES = (
@@ -88,6 +92,8 @@ METADATA_TYPES = (
     "disctotal",
     "date",
     "isrc",
+    "replaygain_track_gain",
+    "replaygain_album_gain",
 )
 
 
@@ -150,7 +156,17 @@ class Container(Enum):
             else:
                 text = self._attr_from_meta(meta, k)
 
-            if text is not None and v is not None:
+            if text is not None and k in {
+                "replaygain_track_gain",
+                "replaygain_album_gain",
+            }:
+                out.append(
+                    (
+                        "TXXX",
+                        id3.TXXX(encoding=3, desc=k.upper(), text=str(text)),
+                    )
+                )
+            elif text is not None and v is not None:
                 out.append((v.__name__, v(encoding=3, text=text)))
         return out
 
@@ -166,6 +182,11 @@ class Container(Enum):
                 # we have to pass in the actual bytes to mutagen
                 # See mutagen.MP4Tags.__render_freeform
                 text = meta.isrc.encode("utf-8")
+            elif k in {"replaygain_track_gain", "replaygain_album_gain"}:
+                if (val := self._attr_from_meta(meta, k)) is not None:
+                    text = val.encode("utf-8")
+                else:
+                    text = None
             else:
                 text = self._attr_from_meta(meta, k)
 
@@ -184,6 +205,7 @@ class Container(Enum):
             "composer",
             "isrc",
             "lyrics",
+            "replaygain_track_gain",
         }
         if attr in in_trackmetadata:
             if attr == "album":
@@ -197,6 +219,8 @@ class Container(Enum):
                 return meta.album.get_genres()
             elif attr == "copyright":
                 return meta.album.get_copyright()
+            elif attr == "replaygain_album_gain":
+                return meta.album.replaygain_album_gain
             val = getattr(meta.album, attr)
             if val is None:
                 return None
@@ -204,7 +228,10 @@ class Container(Enum):
 
     def tag_audio(self, audio, tags: list[tuple]):
         for k, v in tags:
-            audio[k] = v
+            if isinstance(v, id3.Frame):
+                audio.add(v)
+            else:
+                audio[k] = v
 
     async def embed_cover(self, audio, cover_path):
         if self == Container.FLAC:
