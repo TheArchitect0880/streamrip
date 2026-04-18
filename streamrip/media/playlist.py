@@ -67,6 +67,7 @@ class PendingPlaylistTrack(Pending):
             self.db.set_failed(self.client.source, "track", self.id)
             return None
 
+        meta.compilation = 1
         c = self.config.session.metadata
         if c.renumber_playlist_tracks:
             meta.tracknumber = self.position

@@ -79,6 +79,7 @@ class TrackMetadata:
     composer: str | None
     artists: list[str] | None = None
     author: str | None = None
+    compilation: int = 0
     isrc: str | None = None
     lyrics: str | None = ""
     replaygain_track_gain: str | None = None
