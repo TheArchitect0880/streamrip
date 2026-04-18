@@ -251,14 +251,103 @@ class TidalDownloadable(Downloadable):
             )
         self.url = url
         self.enc_key = encryption_key
+        self._use_ffmpeg_manifest = ".mpd" in url or ".m3u8" in url
         self.downloadable = BasicDownloadable(session, url, self.extension, "tidal")
 
     async def _download(self, path: str, callback):
+        if self._use_ffmpeg_manifest:
+            await self._download_manifest(path, callback)
+            return
+
         await self.downloadable._download(path, callback)
         if self.enc_key is not None:
             dec_bytes = await self._decrypt_mqa_file(path, self.enc_key)
             async with aiofiles.open(path, "wb") as audio:
                 await audio.write(dec_bytes)
+
+    async def _download_manifest(self, path: str, callback):
+        if shutil.which("ffmpeg") is None:
+            raise Exception("FFmpeg must be installed for Tidal DASH/HLS downloads.")
+
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg",
+            "-y",
+            "-i",
+            self.url,
+            "-vn",
+            "-acodec",
+            "copy",
+            "-loglevel",
+            "warning",
+            path,
+            stderr=asyncio.subprocess.PIPE,
+        )
+
+        last_size = 0
+        while proc.returncode is None:
+            await asyncio.sleep(0.5)
+            if os.path.exists(path):
+                current_size = os.path.getsize(path)
+                delta = current_size - last_size
+                if delta > 0:
+                    callback(delta)
+                    last_size = current_size
+
+        _, stderr = await proc.communicate()
+
+        if os.path.exists(path):
+            current_size = os.path.getsize(path)
+            delta = current_size - last_size
+            if delta > 0:
+                callback(delta)
+
+        if proc.returncode != 0:
+            raise Exception(
+                f"FFmpeg failed to download Tidal manifest: {stderr.decode('utf-8', errors='ignore')}"
+            )
+
+    async def size(self) -> int:
+        if self._use_ffmpeg_manifest:
+            if self._size is not None:
+                return self._size
+
+            if ".mpd" in self.url:
+                async with self.session.get(self.url) as resp:
+                    resp.raise_for_status()
+                    manifest = await resp.text("utf-8")
+
+                duration_match = re.search(
+                    r'mediaPresentationDuration="([^"]+)"', manifest
+                )
+                bandwidths = [
+                    int(b)
+                    for b in re.findall(
+                        r'bandwidth="(\d+)"', manifest, flags=re.IGNORECASE
+                    )
+                ]
+
+                if duration_match and bandwidths:
+                    duration = self._parse_iso8601_duration(duration_match.group(1))
+                    self._size = max(1, int((duration * max(bandwidths)) / 8))
+                    return self._size
+
+            self._size = 1
+            return self._size
+        return await super().size()
+
+    @staticmethod
+    def _parse_iso8601_duration(duration: str) -> float:
+        match = re.match(
+            r"^PT(?:(?P<hours>\d+)H)?(?:(?P<minutes>\d+)M)?(?:(?P<seconds>[\d.]+)S)?$",
+            duration,
+        )
+        if match is None:
+            return 0.0
+
+        hours = int(match.group("hours") or 0)
+        minutes = int(match.group("minutes") or 0)
+        seconds = float(match.group("seconds") or 0.0)
+        return hours * 3600 + minutes * 60 + seconds
 
     @property
     def _size(self):

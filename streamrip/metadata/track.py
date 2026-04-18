@@ -10,6 +10,23 @@ from .util import safe_get, typed
 logger = logging.getLogger("streamrip")
 
 
+def _tidal_quality_from_resp(resp: dict) -> int:
+    quality_map: dict[str, int] = {
+        "LOW": 0,
+        "HIGH": 1,
+        "LOSSLESS": 2,
+        "HI_RES": 3,
+    }
+
+    tidal_quality = typed(resp.get("audioQuality", "LOW"), str)
+    quality = quality_map.get(tidal_quality, 0)
+    tags = safe_get(resp, "mediaMetadata", "tags", default=[])
+    if isinstance(tags, list) and "HIRES_LOSSLESS" in tags:
+        quality = max(quality, 3)
+
+    return quality
+
+
 @dataclass(slots=True)
 class TrackInfo:
     id: str
@@ -173,25 +190,24 @@ class TrackMetadata:
 
         lyrics = track.get("lyrics", "")
 
-        quality_map: dict[str, int] = {
-            "LOW": 0,
-            "HIGH": 1,
-            "LOSSLESS": 2,
-            "HI_RES": 3,
-        }
-
-        tidal_quality = track.get("audioQuality")
-        if tidal_quality is not None:
-            quality = quality_map[tidal_quality]
-        else:
-            quality = 0
+        quality = _tidal_quality_from_resp(track)
+        sampling_rate = typed(
+            track.get("maximumSamplingRate") or track.get("maximum_sampling_rate"),
+            int | float | None,
+        )
+        bit_depth = typed(
+            track.get("maximumBitDepth") or track.get("maximum_bit_depth"),
+            int | None,
+        )
 
         if quality >= 2:
-            sampling_rate = 44100
-            if quality == 3:
-                bit_depth = 24
-            else:
-                bit_depth = 16
+            if sampling_rate is None:
+                sampling_rate = 44100
+            if bit_depth is None:
+                if quality == 3:
+                    bit_depth = 24
+                else:
+                    bit_depth = 16
         else:
             sampling_rate = bit_depth = None
 
