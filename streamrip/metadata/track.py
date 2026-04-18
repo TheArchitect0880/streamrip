@@ -77,10 +77,15 @@ class TrackMetadata:
     tracknumber: int
     discnumber: int
     composer: str | None
+    artists: list[str] | None = None
     author: str | None = None
     isrc: str | None = None
     lyrics: str | None = ""
     replaygain_track_gain: str | None = None
+    source_platform: str | None = None
+    source_track_id: str | None = None
+    source_album_id: str | None = None
+    source_artist_id: str | None = None
 
     @classmethod
     def from_qobuz(cls, album: AlbumMetadata, resp: dict) -> TrackMetadata | None:
@@ -119,7 +124,10 @@ class TrackMetadata:
             ),
             str,
         )
+        artists: list[str] = [artist]
         track_id = str(resp["id"])
+        source_album_id = typed(safe_get(resp, "album", "id"), int | str | None)
+        source_artist_id = typed(safe_get(resp, "performer", "id"), int | str | None)
         bit_depth = typed(resp.get("maximum_bit_depth"), int | None)
         sampling_rate = typed(resp.get("maximum_sampling_rate"), int | float | None)
         replaygain_track_gain = _format_replaygain(
@@ -148,9 +156,16 @@ class TrackMetadata:
             tracknumber=tracknumber,
             discnumber=discnumber,
             composer=composer,
+            artists=artists,
             author=author,
             isrc=isrc,
             replaygain_track_gain=replaygain_track_gain,
+            source_platform="qobuz",
+            source_track_id=track_id,
+            source_album_id=str(source_album_id) if source_album_id is not None else None,
+            source_artist_id=str(source_artist_id)
+            if source_artist_id is not None
+            else None,
         )
 
     @classmethod
@@ -163,9 +178,14 @@ class TrackMetadata:
         work = None
         title = typed(resp["title"], str)
         artist = typed(resp["artist"]["name"], str)
+        artists = [typed(a["name"], str) for a in typed(resp.get("contributors"), list | None) or []]
+        if not artists:
+            artists = [artist]
         tracknumber = typed(resp["track_position"], int)
         discnumber = typed(resp["disk_number"], int)
         composer = None
+        source_album_id = typed(safe_get(resp, "album", "id"), int | str | None)
+        source_artist_id = typed(safe_get(resp, "artist", "id"), int | str | None)
         info = TrackInfo(
             id=track_id,
             quality=album.info.quality,
@@ -182,7 +202,14 @@ class TrackMetadata:
             tracknumber=tracknumber,
             discnumber=discnumber,
             composer=composer,
+            artists=artists,
             isrc=isrc,
+            source_platform="deezer",
+            source_track_id=track_id,
+            source_album_id=str(source_album_id) if source_album_id is not None else None,
+            source_artist_id=str(source_artist_id)
+            if source_artist_id is not None
+            else None,
         )
 
     @classmethod
@@ -198,6 +225,7 @@ class TrackMetadata:
 
         title = typed(track["title"].strip(), str)
         artist = typed(track["user"]["username"], str)
+        artists = [artist]
         tracknumber = 1
 
         info = TrackInfo(
@@ -216,7 +244,14 @@ class TrackMetadata:
             tracknumber=tracknumber,
             discnumber=0,
             composer=None,
+            artists=artists,
             isrc=isrc,
+            source_platform="soundcloud",
+            source_track_id=str(track_id),
+            source_album_id=str(album.info.id),
+            source_artist_id=str(track.get("user", {}).get("id"))
+            if track.get("user", {}).get("id") is not None
+            else None,
         )
 
     @classmethod
@@ -232,11 +267,17 @@ class TrackMetadata:
         tracknumber = typed(track.get("trackNumber", 1), int)
         discnumber = typed(track.get("volumeNumber", 1), int)
 
-        artists = track.get("artists")
+        artists = typed(track.get("artists"), list | None) or []
         if len(artists) > 0:
-            artist = ", ".join(a["name"] for a in artists)
+            artist_names = [typed(a.get("name"), str) for a in artists]
+            artist = ", ".join(artist_names)
+            source_artist_id = typed(artists[0].get("id"), int | str | None)
         else:
             artist = track["artist"]["name"]
+            artist_names = [artist]
+            source_artist_id = typed(safe_get(track, "artist", "id"), int | str | None)
+
+        source_album_id = typed(safe_get(track, "album", "id"), int | str | None)
 
         lyrics = track.get("lyrics", "")
         replaygain_track_gain = _format_replaygain(
@@ -280,9 +321,16 @@ class TrackMetadata:
             tracknumber=tracknumber,
             discnumber=discnumber,
             composer=None,
+            artists=artist_names,
             isrc=isrc,
             lyrics=lyrics,
             replaygain_track_gain=replaygain_track_gain,
+            source_platform="tidal",
+            source_track_id=item_id,
+            source_album_id=str(source_album_id) if source_album_id is not None else None,
+            source_artist_id=str(source_artist_id)
+            if source_artist_id is not None
+            else None,
         )
 
     @classmethod
@@ -306,9 +354,11 @@ class TrackMetadata:
             "title": self.title,
             "tracknumber": self.tracknumber,
             "artist": self.artist,
+            "artists": ", ".join(self.artists or [self.artist]),
             "albumartist": self.album.albumartist,
             "albumcomposer": self.album.albumcomposer or none_text,
             "composer": self.composer or none_text,
             "explicit": " (Explicit) " if self.info.explicit else "",
+            "source_platform": self.source_platform or none_text,
         }
         return format_string.format(**info)
