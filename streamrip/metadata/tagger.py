@@ -1,6 +1,7 @@
+import asyncio
 import logging
-import os
 from enum import Enum
+from pathlib import Path
 
 import aiofiles
 from mutagen import id3
@@ -280,7 +281,7 @@ class Container(Enum):
 
     async def embed_cover(self, audio, cover_path):
         if self == Container.FLAC:
-            size = os.path.getsize(cover_path)
+            size = await asyncio.to_thread(lambda p: Path(p).stat().st_size, cover_path)
             if size > FLAC_MAX_BLOCKSIZE:
                 raise Exception("Cover art too big for FLAC")
             cover = Picture()

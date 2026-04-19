@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-import re
 import shutil
 import subprocess
 from functools import wraps
@@ -13,75 +12,13 @@ import aiohttp
 import click
 from click_help_colors import HelpColorsGroup  # type: ignore
 from rich.logging import RichHandler
-from rich.markdown import Markdown
 from rich.prompt import Confirm
 from rich.traceback import install
 
 from .. import __version__, db
 from ..config import DEFAULT_CONFIG_PATH, Config, OutdatedConfigError, set_user_defaults
 from ..console import console
-from ..utils.ssl_utils import get_aiohttp_connector_kwargs
 from .main import Main
-
-
-_NUMERIC_PREFIX_RE = re.compile(r"^v?(\d+(?:\.\d+)*)", re.IGNORECASE)
-_SUFFIX_NUM_RE = re.compile(r"(\d+)")
-
-
-def _parse_version_components(version: str) -> tuple[tuple[int, ...], int, int]:
-    """Parse a version string into comparable components.
-
-    Returns (release tuple, stage rank, stage number), where stage rank is:
-    dev < alpha < beta < rc < final < post
-    """
-    v = version.strip().lower()
-    match = _NUMERIC_PREFIX_RE.match(v)
-    if match is None:
-        return (0,), 4, 0
-
-    release = tuple(int(part) for part in match.group(1).split("."))
-    suffix = v[match.end() :].strip(".-_")
-    if not suffix:
-        return release, 4, 0
-
-    stage_num_match = _SUFFIX_NUM_RE.search(suffix)
-    stage_num = int(stage_num_match.group(1)) if stage_num_match else 0
-
-    if suffix.startswith("dev"):
-        return release, 0, stage_num
-    if suffix.startswith("a") or suffix.startswith("alpha"):
-        return release, 1, stage_num
-    if suffix.startswith("b") or suffix.startswith("beta"):
-        return release, 2, stage_num
-    if suffix.startswith("rc"):
-        return release, 3, stage_num
-    if suffix.startswith("post"):
-        return release, 5, stage_num
-
-    # Unknown suffix: treat as pre-release to avoid false "new version" warnings.
-    return release, 3, stage_num
-
-
-def _compare_versions(v1: str, v2: str) -> int:
-    r1, s1, n1 = _parse_version_components(v1)
-    r2, s2, n2 = _parse_version_components(v2)
-
-    max_len = max(len(r1), len(r2))
-    for i in range(max_len):
-        p1 = r1[i] if i < len(r1) else 0
-        p2 = r2[i] if i < len(r2) else 0
-        if p1 != p2:
-            return 1 if p1 > p2 else -1
-
-    if s1 != s2:
-        return 1 if s1 > s2 else -1
-    if n1 != n2:
-        return 1 if n1 > n2 else -1
-    return 0
-
-
-def is_update_available(current_version: str, latest_version: str) -> bool:
-    return _compare_versions(latest_version, current_version) > 0
 
 
 def coro(f):
@@ -237,32 +174,10 @@ async def url(ctx, urls):
     try:
         with ctx.obj["config"] as cfg:
             cfg: Config
-            updates = cfg.session.misc.check_for_updates
-            if updates:
-                # Run in background
-                version_coro = asyncio.create_task(
-                    latest_streamrip_version(
-                        verify_ssl=cfg.session.downloads.verify_ssl
-                    )
-                )
-            else:
-                version_coro = None
-
             async with Main(cfg) as main:
                 await main.add_all(urls)
                 await main.resolve()
                 await main.rip()
-
-            if version_coro is not None:
-                latest_version, notes = await version_coro
-                if is_update_available(__version__, latest_version):
-                    console.print(
-                        f"\n[green]A new version of streamrip [cyan]v{latest_version}[/cyan]"
-                        " is available! Run [white][bold]pip3 install streamrip --upgrade[/bold][/white]"
-                        " to update.[/green]\n"
-                    )
-
-                    console.print(Markdown(notes))
 
     except aiohttp.ClientConnectorCertificateError as e:
         from ..utils.ssl_utils import print_ssl_error_help
@@ -507,35 +422,6 @@ async def id(ctx, source, media_type, id):
             await main.add_by_id(source, media_type, id)
             await main.resolve()
             await main.rip()
-
-
-async def latest_streamrip_version(verify_ssl: bool = True) -> tuple[str, str | None]:
-    """Get the latest streamrip version from PyPI and release notes from GitHub.
-
-    Args:
-        verify_ssl: Whether to verify SSL certificates
-
-    Returns:
-        A tuple of (version, release_notes)
-    """
-    # Create connector with appropriate SSL settings
-    connector_kwargs = get_aiohttp_connector_kwargs(verify_ssl=verify_ssl)
-    connector = aiohttp.TCPConnector(**connector_kwargs)
-
-    async with aiohttp.ClientSession(connector=connector) as s:
-        async with s.get("https://pypi.org/pypi/streamrip/json") as resp:
-            data = await resp.json()
-        version = data["info"]["version"]
-
-        if version == __version__:
-            return version, None
-
-        async with s.get(
-            "https://api.github.com/repos/nathom/streamrip/releases/latest"
-        ) as resp:
-            json = await resp.json()
-        notes = json["body"]
-    return version, notes
 
 
 if __name__ == "__main__":

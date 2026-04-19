@@ -12,6 +12,7 @@ import tempfile
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Optional
 
 import aiofiles
@@ -37,18 +38,17 @@ def generate_temp_path(url: str):
     )
 
 
-async def fast_async_download(path, url, headers, callback):
-    """Synchronous download with yield for every 1MB read.
+def _file_size_or_none(path: str) -> int | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    return p.stat().st_size
 
-    Using aiofiles/aiohttp resulted in a yield to the event loop for every 1KB,
-    which made file downloads CPU-bound. This resulted in a ~10MB max total download
-    speed. This fixes the issue by only yielding to the event loop for every 1MB read.
-    """
+
+def _fast_download_sync(path: str, url: str, headers: dict, callback):
     chunk_size: int = 2**17  # 131 KB
-    counter = 0
-    yield_every = 8  # 1 MB
-    with open(path, "wb") as file:  # noqa: ASYNC101
-        with requests.get(  # noqa: ASYNC100
+    with open(path, "wb") as file:
+        with requests.get(
             url,
             headers=headers,
             allow_redirects=True,
@@ -57,9 +57,16 @@ async def fast_async_download(path, url, headers, callback):
             for chunk in resp.iter_content(chunk_size=chunk_size):
                 file.write(chunk)
                 callback(len(chunk))
-                if counter % yield_every == 0:
-                    await asyncio.sleep(0)
-                counter += 1
+
+
+async def fast_async_download(path, url, headers, callback):
+    """Synchronous download with yield for every 1MB read.
+
+    Using aiofiles/aiohttp resulted in a yield to the event loop for every 1KB,
+    which made file downloads CPU-bound. This resulted in a ~10MB max total download
+    speed. This fixes the issue by only yielding to the event loop for every 1MB read.
+    """
+    await asyncio.to_thread(_fast_download_sync, path, url, headers, callback)
 
 
 @dataclass(slots=True)
@@ -286,8 +293,8 @@ class TidalDownloadable(Downloadable):
         last_size = 0
         while proc.returncode is None:
             await asyncio.sleep(0.5)
-            if os.path.exists(path):
-                current_size = os.path.getsize(path)
+            current_size = await asyncio.to_thread(_file_size_or_none, path)
+            if current_size is not None:
                 delta = current_size - last_size
                 if delta > 0:
                     callback(delta)
@@ -295,8 +302,8 @@ class TidalDownloadable(Downloadable):
 
         _, stderr = await proc.communicate()
 
-        if os.path.exists(path):
-            current_size = os.path.getsize(path)
+        current_size = await asyncio.to_thread(_file_size_or_none, path)
+        if current_size is not None:
             delta = current_size - last_size
             if delta > 0:
                 callback(delta)
