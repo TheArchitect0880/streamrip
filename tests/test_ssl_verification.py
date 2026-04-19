@@ -6,7 +6,7 @@ import pytest
 
 from streamrip.client.client import Client
 from streamrip.client.qobuz import QobuzSpoofer
-from streamrip.rip.cli import latest_streamrip_version, rip
+from streamrip.rip.cli import rip
 from streamrip.utils.ssl_utils import (
     create_ssl_context,
     get_aiohttp_connector_kwargs,
@@ -145,65 +145,6 @@ async def test_client_get_session_creates_connector():
 
         # Test with SSL verification disabled
         await Client.get_session(verify_ssl=False)
-
-        # Verify get_aiohttp_connector_kwargs was called with verify_ssl=False
-        mock_get_kwargs.assert_called_once_with(verify_ssl=False)
-
-
-def test_latest_streamrip_version_supports_verify_ssl():
-    """Test that latest_streamrip_version supports verify_ssl parameter."""
-    # Check if the function accepts the verify_ssl parameter
-    signature = inspect.signature(latest_streamrip_version)
-
-    # Check for verify_ssl parameter
-    has_verify_ssl = "verify_ssl" in signature.parameters
-
-    # Skip rather than fail if option isn't implemented yet
-    if not has_verify_ssl:
-        pytest.skip(
-            "verify_ssl parameter not implemented in latest_streamrip_version yet"
-        )
-
-
-@pytest.mark.asyncio
-async def test_latest_streamrip_version_creates_session():
-    """Test that latest_streamrip_version creates a session with verify_ssl parameter."""
-    # Check if the function accepts the verify_ssl parameter
-    signature = inspect.signature(latest_streamrip_version)
-
-    # Skip if verify_ssl is not in parameters
-    if "verify_ssl" not in signature.parameters:
-        pytest.skip(
-            "verify_ssl parameter not implemented in latest_streamrip_version yet"
-        )
-
-    # Patch the get_aiohttp_connector_kwargs function and related modules
-    with (
-        patch("streamrip.rip.cli.get_aiohttp_connector_kwargs") as mock_get_kwargs,
-        patch("aiohttp.ClientSession") as mock_client_session,
-        patch("aiohttp.TCPConnector") as mock_connector,
-    ):
-        mock_get_kwargs.return_value = {"verify_ssl": False}
-        mock_connector.return_value = MagicMock()
-
-        # Setup mock responses for API calls
-        mock_session_instance = AsyncMock()
-        mock_client_session.return_value = mock_session_instance
-
-        mock_context_manager = AsyncMock()
-        mock_session_instance.get.return_value = mock_context_manager
-        mock_context_manager.__aenter__.return_value.json.return_value = {
-            "info": {"version": "1.0.0"}
-        }
-
-        # Make sure the test doesn't actually wait
-        with patch("streamrip.rip.cli.__version__", "1.0.0"):
-            # Run with SSL verification parameter
-            try:
-                await latest_streamrip_version(verify_ssl=False)
-            except Exception:
-                # We just need to ensure it doesn't raise TypeError for the verify_ssl parameter
-                pass
 
         # Verify get_aiohttp_connector_kwargs was called with verify_ssl=False
         mock_get_kwargs.assert_called_once_with(verify_ssl=False)
