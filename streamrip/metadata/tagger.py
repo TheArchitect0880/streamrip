@@ -211,7 +211,12 @@ class Container(Enum):
                     text = val.encode("utf-8")
                 else:
                     text = None
-            elif k in {"artists", "source_track_id", "source_album_id", "source_artist_id"}:
+            elif k in {
+                "artists",
+                "source_track_id",
+                "source_album_id",
+                "source_artist_id",
+            }:
                 val = self._attr_from_meta(meta, k)
                 if val is None:
                     text = None

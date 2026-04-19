@@ -110,9 +110,9 @@ class TrackMetadata:
         role_authors = []
         if isinstance(parsed_roles, dict):
             role_composers = typed(parsed_roles.get("Composer"), list | None) or []
-            role_authors = (
-                typed(parsed_roles.get("Author"), list | None) or []
-            ) + (typed(parsed_roles.get("Lyricist"), list | None) or [])
+            role_authors = (typed(parsed_roles.get("Author"), list | None) or []) + (
+                typed(parsed_roles.get("Lyricist"), list | None) or []
+            )
         composer = _merge_names(base_composer, role_composers)
         author = _merge_names(None, role_authors)
         tracknumber = typed(resp.get("track_number", 1), int)
@@ -163,7 +163,9 @@ class TrackMetadata:
             replaygain_track_gain=replaygain_track_gain,
             source_platform="qobuz",
             source_track_id=track_id,
-            source_album_id=str(source_album_id) if source_album_id is not None else None,
+            source_album_id=str(source_album_id)
+            if source_album_id is not None
+            else None,
             source_artist_id=str(source_artist_id)
             if source_artist_id is not None
             else None,
@@ -179,7 +181,10 @@ class TrackMetadata:
         work = None
         title = typed(resp["title"], str)
         artist = typed(resp["artist"]["name"], str)
-        artists = [typed(a["name"], str) for a in typed(resp.get("contributors"), list | None) or []]
+        artists = [
+            typed(a["name"], str)
+            for a in typed(resp.get("contributors"), list | None) or []
+        ]
         if not artists:
             artists = [artist]
         tracknumber = typed(resp["track_position"], int)
@@ -207,7 +212,9 @@ class TrackMetadata:
             isrc=isrc,
             source_platform="deezer",
             source_track_id=track_id,
-            source_album_id=str(source_album_id) if source_album_id is not None else None,
+            source_album_id=str(source_album_id)
+            if source_album_id is not None
+            else None,
             source_artist_id=str(source_artist_id)
             if source_artist_id is not None
             else None,
@@ -328,7 +335,9 @@ class TrackMetadata:
             replaygain_track_gain=replaygain_track_gain,
             source_platform="tidal",
             source_track_id=item_id,
-            source_album_id=str(source_album_id) if source_album_id is not None else None,
+            source_album_id=str(source_album_id)
+            if source_album_id is not None
+            else None,
             source_artist_id=str(source_artist_id)
             if source_artist_id is not None
             else None,

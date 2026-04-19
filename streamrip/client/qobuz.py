@@ -255,7 +255,9 @@ class QobuzClient(Client):
             items = resp["tracks"].get("items")
             if isinstance(items, list):
                 for track in items:
-                    if isinstance(track, dict) and isinstance(track.get("performers"), str):
+                    if isinstance(track, dict) and isinstance(
+                        track.get("performers"), str
+                    ):
                         track["_parsed_performer_roles"] = self.parse_performers(
                             track["performers"]
                         )

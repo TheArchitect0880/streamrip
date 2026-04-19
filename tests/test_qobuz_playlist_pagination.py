@@ -85,7 +85,9 @@ async def test_get_playlist_small(mock_qobuz_client):
         },
     }
 
-    mock_qobuz_client._api_request = AsyncMock(return_value=(200, small_playlist_response))
+    mock_qobuz_client._api_request = AsyncMock(
+        return_value=(200, small_playlist_response)
+    )
 
     result = await mock_qobuz_client.get_playlist("test_small_playlist_id")
 

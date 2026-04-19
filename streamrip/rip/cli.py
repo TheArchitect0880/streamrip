@@ -223,7 +223,7 @@ async def file(ctx, path):
                     s = set(items)
                     if len(s) < len(items):
                         console.print(
-                            f"Found [orange]{len(items)-len(s)}[/orange] repeated URLs!"
+                            f"Found [orange]{len(items) - len(s)}[/orange] repeated URLs!"
                         )
                         items = list(s)
                     console.print(

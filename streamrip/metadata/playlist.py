@@ -61,12 +61,12 @@ class PlaylistMetadata:
                 )
                 if meta is None:
                     logger.error(
-                        f"Track {i+1} in playlist {name} not available for stream"
+                        f"Track {i + 1} in playlist {name} not available for stream"
                     )
                     unavailable_count += 1
                     continue
             except Exception as e:
-                logger.error(f"Error processing track {i+1} in playlist {name}: {e}")
+                logger.error(f"Error processing track {i + 1} in playlist {name}: {e}")
                 unavailable_count += 1
                 continue
             tracks.append(meta)
